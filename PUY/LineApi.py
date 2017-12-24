@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 from Api import Poll, Talk, channel
+import requests,shutil,random,client,string,json,os,tempfile
+import client
+from random import randint
+from time import time
+from datetime import datetime
+import unicodedata
 from lib.curve.ttypes import *
 
 def def_callback(str):
@@ -64,7 +70,37 @@ class LINE:
 
   def updateSettings(self, settingObject):
     return self.Talk.client.updateSettings(0, settingObject)
+    
+  def CloneContactProfile(self, mid):
+    contact = self.getContact(mid)
+    profile = self.getProfile()
+    profile.displayName = contact.displayName
+    profile.statusMessage = contact.statusMessage
+    profile.pictureStatus = contact.pictureStatus
+    self.updateDisplayPicture(profile.pictureStatus)
+    return self.updateProfile(profile)
 
+  def updateDisplayPicture(self, hash_id):
+    return self.Talk.client.updateProfileAttribute(0, 8, hash_id)
+
+  def updateProfilePicture(self, path):
+        file=open(path, 'rb')
+        files = {
+            'file': file
+        }
+        params = {
+            'name': 'media',
+            'type': 'image',
+            'oid': self.profile.mid,
+            'ver': '1.0',
+        }
+        data={
+            'params': json.dumps(params)
+        }
+        r = self.server.postContent(self.server.LINE_OBS_DOMAIN + '/talk/p/upload.nhn', data=data, files=files)
+        if r.status_code != 201:
+            raise Exception('Update profile picture failure.')
+        return True
 
   """Operation"""
 
@@ -84,6 +120,12 @@ class LINE:
 
   def sendMessage(self, messageObject):
         return self.Talk.client.sendMessage(0,messageObject)
+        
+  def removeAllMessage(self, messageObject):
+        return self.Talk.client.removeAllMessage(0,lastMessageId)
+        
+  def post_content(self, urls, data=None, files=None):
+        return self._session.post(urls, headers=self._headers, data=data, files=files)
 
   def sendText(self, Tomid, text):
         msg = Message()
@@ -95,7 +137,7 @@ class LINE:
         M = Message(to=to_,contentType = 1)
         M.contentMetadata = None
         M.contentPreview = None
-        M_id = self._client.sendMessage(M).id
+        M_id = self.Talk.client.sendMessage(M).id
         files = {
             'file': open(path, 'rb'),
         }
@@ -109,11 +151,64 @@ class LINE:
         data = {
             'params': json.dumps(params)
         }
-        r = self._client.post_content('https://os.line.naver.jp/talk/m/upload.nhn', data=data, files=files)
+        r = self.client.post_content('https://os.line.naver.jp/talk/m/upload.nhn', data=data, files=files)
         if r.status_code != 201:
             raise Exception('Upload image failure.')
         #r.content
         return True
+        
+  def sendImageWithURL(self, to_, url):
+      path = '%s/pythonLine-%i.data' % (tempfile.gettempdir(), randint(0, 9))
+      r = requests.get(url, stream=True)
+      if r.status_code == 200:
+         with open(path, 'w') as f:
+            shutil.copyfileobj(r.raw, f)
+      else:
+         raise Exception('Download image failure.')
+      try:
+         self.sendImage(to_, path)
+      except Exception as e:
+         raise e
+  
+  def sendAudio(self, to_, path):
+        M = Message(to=to_,contentType = 3)
+        M.contentMetadata = None
+        M.contentPreview = None
+        M_id = self.Talk.client.sendMessage(0,M).id
+        files = {
+            'file': open(path, 'rb'),
+        }
+        params = {
+            'name': 'media',
+            'oid': M_id,
+            'size': len(open(path, 'rb').read()),
+            'type': 'audio',
+            'ver': '1.0',
+        }
+        data = {
+            'params': json.dumps(params)
+        }
+        r = self.post_content('https://os.line.naver.jp/talk/m/upload.nhn', data=data, files=files)
+        if r.status_code != 201:
+            raise Exception('Upload image failure.')
+        return True
+        
+  def sendAudioWithURL(self, to_, url):
+        path = 'pythonLiness.data'
+        r = requests.get(url, stream=True)
+        if r.status_code == 200:
+            with open(path, 'w') as f:
+                shutil.copyfileobj(r.raw, f)
+        else:
+            raise Exception('Download Audio failure.')
+        try:
+            self.sendAudio(to_, path)
+        except Exception as e:
+            raise e
+        
+  def removeAllMessages(self, lastMessageId):
+	return self.Talk.client.removeAllMessages(0, lastMessageId)
+	
   def sendEvent(self, messageObject):
         return self._client.sendEvent(0, messageObject)
 
@@ -314,4 +409,4 @@ class LINE:
       print("\nMid Kamu -> " + prof.mid)
       print("\nNama Akun -> " + prof.displayName)
       print("\nAuthToken Kamu -> " + self.authToken)
-      print("\nCert Kamu -> " + self.cert if self.cert is not None else "\nMau Tanya Lebih?\nline://ti/p/~yapuyy")
+      print("\nCert Kamu -> " + self.cert if self.cert is not None else "\nMau Tanya Lebih?\nline://ti/p/~bayu_aji_setiawan")
